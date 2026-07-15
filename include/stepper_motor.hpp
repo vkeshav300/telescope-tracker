@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-enum STEPPER_DIR : bool { CW = false, CCW = true };
+enum STEPPER_DIR : bool { CW = true, CCW = false };
 
 class Stepper_Motor {
 private:

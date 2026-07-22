@@ -2,13 +2,14 @@
 
 #include "stepper.hpp"
 
-static Stepper::Motor stepper(23, 22, 19, 18);
+static Stepper::Motor stepper(23, 22, 19, 18, 1.8f);
 
 namespace io {
 
 void display_cmds() {
-  Serial.print("\nCommands:\n\t[1]\tTest stepper motor\n\t[2]\tCustom stepper "
-               "test\n\t[3]\tSwitch microstepping modes\n\n > ");
+  Serial.print(
+      "\nCommands:\n\t[1]\tCustom stepper revolve\n\t[2]\tCustom stepper "
+      "test\n\t[3]\tSwitch microstepping modes\n\n > ");
 }
 
 void wait_until_available() {
@@ -22,10 +23,21 @@ void poll() {
   const int input = Serial.parseInt();
   Serial.print(String(input));
   switch (input) {
-  case 1:
-    Serial.print("\nTesting...\n");
-    stepper.test();
+  case 1: {
+    Serial.print("\nEnter degrees (+ for CW, - for CCW) > ");
+    wait_until_available();
+    const float deg = Serial.parseFloat();
+    Serial.print(String(deg) + "\nStarting...\n");
+
+    if (deg > 0)
+      stepper.revolve(deg, Stepper::DIR_CW);
+    else
+      stepper.revolve(-deg, Stepper::DIR_CCW);
+
+    Serial.print("Finshied\n");
+
     break;
+  }
 
   case 2: {
     Serial.print("\nEnter steps (+ for CW, - for CCW) > ");
@@ -44,30 +56,17 @@ void poll() {
   }
 
   case 3: {
-    static uint8_t mode;
-    switch (mode) {
-    case Stepper::MSTEP_8:
-      mode = Stepper::MSTEP_16;
-      Serial.print("\nMode: MS16\n");
-      break;
+    Serial.print("\nEnter microstepping division > ");
+    wait_until_available();
+    const int division = Serial.parseInt();
+    Serial.print(String(division));
 
-    case Stepper::MSTEP_16:
-      mode = Stepper::MSTEP_32;
-      Serial.print("\nMode: MS32\n");
-      break;
+    const bool err_result = stepper.configure_mstep(division);
+    if (!err_result)
+      Serial.print("\nSuccess\n");
+    else
+      Serial.print("\nInvalid division\n");
 
-    case Stepper::MSTEP_32:
-      mode = Stepper::MSTEP_64;
-      Serial.print("\nMode: MS64\n");
-      break;
-
-    default:
-      mode = Stepper::MSTEP_8;
-      Serial.print("\nMode: MS8\n");
-      break;
-    }
-
-    stepper.configure_mstep(mode);
     break;
   }
 

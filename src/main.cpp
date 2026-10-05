@@ -2,7 +2,7 @@
 
 #include "stepper.hpp"
 
-static Stepper::Motor stepper(23, 22, 19, 18, 1.8f);
+static Stepper::Motor stepper(23, 22, 19, 18, 0.9f);
 
 namespace io {
 
@@ -29,12 +29,14 @@ void poll() {
     const float deg = Serial.parseFloat();
     Serial.print(String(deg) + "\nStarting...\n");
 
+    float lost;
     if (deg > 0)
-      stepper.revolve(deg, Stepper::DIR_CW);
+      lost = stepper.revolve(deg, Stepper::DIR_CW);
     else
-      stepper.revolve(-deg, Stepper::DIR_CCW);
+      lost = stepper.revolve(-deg, Stepper::DIR_CCW);
 
-    Serial.print("Finshied\n");
+    Serial.print("Finshied (approximately " + String(lost, 6) +
+                 " degrees lost)\n");
 
     break;
   }

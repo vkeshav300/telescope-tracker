@@ -24,9 +24,9 @@ public:
 
   bool configure_mstep(const uint8_t division);
 
-  void step(const uint16_t steps, const bool dir);
+  void step(const uint32_t steps, const bool dir);
 
-  void revolve(const float deg, const bool dir);
+  double revolve(const double deg, const bool dir);
 };
 
 } // namespace Stepper

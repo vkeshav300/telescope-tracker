@@ -68,7 +68,7 @@ void Motor::step(const uint32_t steps, const bool dir) {
   digitalWrite(m_pin_dir, dir);
   delay(250);
 
-  for (uint16_t step = 0; step < steps; step++) {
+  for (uint32_t step = 0; step < steps; step++) {
     digitalWrite(m_pin_step, HIGH);
     delayMicroseconds(m_pulse_us);
     digitalWrite(m_pin_step, LOW);

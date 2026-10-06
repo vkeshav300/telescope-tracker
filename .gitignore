@@ -2,3 +2,6 @@
 build/
 .pio/
 .cache/
+
+# OS Caches
+.DS_Store

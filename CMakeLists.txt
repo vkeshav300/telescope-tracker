@@ -7,3 +7,5 @@ project(telescope_tracker
 # Keep firmware upload and serial monitoring explicit in the root build.
 add_subdirectory(firmware EXCLUDE_FROM_ALL)
 add_subdirectory(software)
+
+add_custom_target(full DEPENDS firmware software)

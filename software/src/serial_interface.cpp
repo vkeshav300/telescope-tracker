@@ -80,10 +80,13 @@ Port::Port(const std::string &name, const uint32_t baud_rate)
 
     if (m_status == STATUS_ERR_TIMEOUT) {
       change_status(STATUS_ERR_CONNECTION, "failed to connect");
+      return;
     }
-  } catch (...) {
+
+    log("connected");
+  } catch (const std::exception &err) {
     clean();
-    throw;
+    throw err;
   }
 }
 

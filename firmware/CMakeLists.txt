@@ -4,15 +4,15 @@ find_program(PIO_COMMAND
 )
 
 # Compile commands (for LSP)
-set(PIO_COMPILE_COMMANDS "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json")
-add_custom_target(export_compile_commands ALL
-    COMMAND "${PIO_COMMAND}" run -t compiledb
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${PIO_COMPILE_COMMANDS}"
-            "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"
-    COMMAND "${CMAKE_COMMAND}" -E remove -f "${PIO_COMPILE_COMMANDS}"
+set(PIO_COMPILE_COMMANDS "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json")
+add_custom_target(export_firmware_compile_commands
+    COMMAND "${CMAKE_COMMAND}" -E env
+            "TELESCOPE_COMPILE_COMMANDS_PATH=${PIO_COMPILE_COMMANDS}"
+            "${PIO_COMMAND}" run -t compiledb
+    BYPRODUCTS "${PIO_COMPILE_COMMANDS}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     USES_TERMINAL
+    VERBATIM
     COMMENT "Generating compile commands"
 )
 
@@ -24,7 +24,7 @@ add_custom_target(firmware
     COMMENT "Building firmware"
 )
 
-add_dependencies(firmware export_compile_commands)
+add_dependencies(firmware export_firmware_compile_commands)
 
 # Build and upload firmware)
 add_custom_target(upload ALL
@@ -36,4 +36,4 @@ add_custom_target(upload ALL
     DEPENDS firmware
 )
 
-add_dependencies(upload export_compile_commands)
+add_dependencies(upload export_firmware_compile_commands)

@@ -2,6 +2,7 @@
 build/
 .pio/
 .cache/
+compile_commands.json
 
 # OS Caches
 .DS_Store

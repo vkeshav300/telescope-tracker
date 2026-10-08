@@ -1,3 +1,5 @@
+enable_language(C)
+
 include(FetchContent)
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -89,8 +91,21 @@ else()
     )
 endif()
 
+# Recheck these patterns during builds so added or removed files trigger a
+# CMake reconfiguration. Include files in subdirectories as well.
+file(GLOB_RECURSE TELESCOPE_SOFTWARE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+)
+
+file(GLOB_RECURSE TELESCOPE_SOFTWARE_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
+)
+
 add_executable(telescope_tracker_software
-    src/main.cpp
+    ${TELESCOPE_SOFTWARE_SOURCES}
+    ${TELESCOPE_SOFTWARE_HEADERS}
 )
 
 target_include_directories(telescope_tracker_software

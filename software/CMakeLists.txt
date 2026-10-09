@@ -103,28 +103,28 @@ file(GLOB_RECURSE TELESCOPE_SOFTWARE_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
 )
 
-add_executable(telescope_tracker_software
+add_executable(tt_ui
     ${TELESCOPE_SOFTWARE_SOURCES}
     ${TELESCOPE_SOFTWARE_HEADERS}
 )
 
-target_include_directories(telescope_tracker_software
+target_include_directories(tt_ui
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-target_compile_features(telescope_tracker_software PRIVATE cxx_std_20)
-set_target_properties(telescope_tracker_software PROPERTIES
+target_compile_features(tt_ui PRIVATE cxx_std_20)
+set_target_properties(tt_ui PROPERTIES
     CXX_EXTENSIONS OFF
 )
 
 if(APPLE)
-    target_compile_definitions(telescope_tracker_software
+    target_compile_definitions(tt_ui
         PRIVATE GL_SILENCE_DEPRECATION
     )
 endif()
 
-target_link_libraries(telescope_tracker_software
+target_link_libraries(tt_ui
     PRIVATE
         dear_imgui::dear_imgui
         libserialport::libserialport
@@ -132,5 +132,5 @@ target_link_libraries(telescope_tracker_software
 )
 
 add_custom_target(software
-    DEPENDS telescope_tracker_software
+    DEPENDS tt_ui
 )

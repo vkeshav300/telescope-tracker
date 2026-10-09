@@ -38,7 +38,7 @@ add_custom_target(export_compile_commands ALL
     COMMENT "Exporting firmware and software compile commands for the LSP"
 )
 add_dependencies(export_compile_commands export_firmware_compile_commands)
-add_dependencies(software export_compile_commands)
-add_dependencies(firmware export_compile_commands)
 
-add_custom_target(full DEPENDS firmware software)
+# Keep individual builds independent: the combined export invokes PlatformIO.
+# Only the combined build needs both targets and their merged LSP database.
+add_custom_target(full DEPENDS firmware software export_compile_commands)

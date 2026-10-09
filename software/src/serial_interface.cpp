@@ -4,6 +4,7 @@
 #include <libserialport.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +12,26 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace {
+
+class Inflight_Guard {
+private:
+  std::atomic<bool> &m_inflight;
+
+public:
+  explicit Inflight_Guard(std::atomic<bool> &inflight) : m_inflight(inflight) {
+    if (m_inflight.exchange(true))
+      throw std::logic_error("serial port is in use");
+  }
+
+  ~Inflight_Guard() { m_inflight.store(false); }
+
+  Inflight_Guard(const Inflight_Guard &) = delete;
+  Inflight_Guard &operator=(const Inflight_Guard &) = delete;
+};
+
+} // namespace
 
 namespace Serial {
 
@@ -51,8 +72,9 @@ Port::Port(const std::string &name, const uint32_t baud_rate) : Port() {
 }
 
 void Port::initialize(const std::string &name, const uint32_t baud_rate) {
+  const Inflight_Guard guard(m_inflight);
   clean();
-  m_status = STATUS_ERR_CONNECTION;
+  m_status.exchange(STATUS_ERR_CONNECTION);
   m_name = name;
   m_baud_rate = baud_rate;
   m_log.emplace("port " + m_name);
@@ -82,18 +104,19 @@ void Port::initialize(const std::string &name, const uint32_t baud_rate) {
     for (char attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
       m_log->add_entry("connecting to device (attempt " +
                        std::to_string(attempt + 1) + "/10)");
-      send("ping");
-      wait(pending, "pong", 500);
-      if (m_status == STATUS_OK || m_status == STATUS_ERR_COMMUNICATION)
+      send_impl("ping");
+      wait_impl(pending, "pong", 500);
+      if (m_status.load() == STATUS_OK ||
+          m_status.load() == STATUS_ERR_COMMUNICATION)
         break;
     }
 
-    if (m_status == STATUS_ERR_TIMEOUT) {
+    if (m_status.load() == STATUS_ERR_TIMEOUT) {
       change_status(STATUS_ERR_CONNECTION, "failed to connect");
       return;
     }
 
-    if (m_status == STATUS_OK)
+    if (m_status.load() == STATUS_OK)
       m_log->add_entry("connected");
   } catch (...) {
     clean();
@@ -118,14 +141,35 @@ void Port::change_status(const std::pair<uint8_t, std::string> &result) {
 }
 
 void Port::change_status(const uint8_t status, const std::string &msg) {
-  m_status = status;
+  m_status.exchange(status);
   if (m_log)
     m_log->add_entry("status changed: " + std::to_string(status) + " " + msg);
 }
 
 void Port::send(const std::string &cmd) {
-  if (!m_open)
-    throw std::logic_error("Cannot send: serial port is not initialized/open");
+  const Inflight_Guard guard(m_inflight);
+  send_impl(cmd);
+}
+
+void Port::wait(std::string &pending, const std::string &expected,
+                const uint16_t timeout_ms) {
+  const Inflight_Guard guard(m_inflight);
+  wait_impl(pending, expected, timeout_ms);
+}
+
+void Port::send_and_wait(const std::string &cmd, std::string &pending,
+                         const std::string &expected,
+                         const uint16_t timeout_ms) {
+  const Inflight_Guard guard(m_inflight);
+  send_impl(cmd);
+  wait_impl(pending, expected, timeout_ms);
+}
+
+void Port::send_impl(const std::string &cmd) {
+  if (!m_open) {
+    change_status(STATUS_ERR_NOT_INITIALIZED, "");
+    throw std::logic_error("cannot send: serial port is not initialized/open");
+  }
 
   m_log->add_entry("TX: " + cmd);
   const std::string msg = cmd + '\n';
@@ -137,8 +181,8 @@ void Port::send(const std::string &cmd) {
   }
 }
 
-void Port::wait(std::string &pending, const std::string &expected,
-                const uint16_t timeout_ms) {
+void Port::wait_impl(std::string &pending, const std::string &expected,
+                     const uint16_t timeout_ms) {
   if (!m_open)
     throw std::logic_error("Cannot wait: serial port is not initialized/open");
 
@@ -159,7 +203,7 @@ void Port::wait(std::string &pending, const std::string &expected,
 
       m_log->add_entry("RX: " + line);
 
-      if (line == expected) {
+      if (line.starts_with(expected)) {
         change_status(STATUS_OK, "");
         return;
       }
@@ -201,6 +245,8 @@ uint8_t Port::get_status() const { return m_status; }
 
 bool Port::is_open() const { return m_open; }
 
-bool Port::is_ok() const { return m_open && m_status == STATUS_OK; }
+bool Port::is_ok() const { return m_open && m_status.load() == STATUS_OK; }
+
+bool Port::is_inflight() const { return m_inflight.load(); }
 
 } // namespace Serial

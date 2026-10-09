@@ -4,6 +4,7 @@
 
 #include <libserialport.h>
 
+#include <atomic>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -20,7 +21,8 @@ enum : uint8_t {
   STATUS_ERR_TIMEOUT,
   STATUS_ERR_COMMUNICATION,
   STATUS_ERR_INCOMPLETE_WRITE,
-  STATUS_ERR_NOT_INITIALIZED
+  STATUS_ERR_NOT_INITIALIZED,
+  STATUS_ERR_INFLIGHT
 };
 
 struct Port_Info {
@@ -35,9 +37,10 @@ class Port {
 private:
   sp_port *m_handle = nullptr;
 
-  uint8_t m_status = STATUS_ERR_NOT_INITIALIZED;
+  std::atomic<uint8_t> m_status = STATUS_ERR_NOT_INITIALIZED;
   uint32_t m_baud_rate = 0;
   bool m_open = false;
+  std::atomic<bool> m_inflight = false;
 
   std::string m_name;
   std::optional<Log> m_log;
@@ -46,6 +49,11 @@ private:
 
   void change_status(const std::pair<uint8_t, std::string> &result);
   void change_status(const uint8_t status, const std::string &msg);
+
+  // These helpers require the caller to hold the in-flight reservation.
+  void send_impl(const std::string &cmd);
+  void wait_impl(std::string &pending, const std::string &expected,
+                 const uint16_t timeout_ms);
 
 public:
   Port() = default;
@@ -62,12 +70,18 @@ public:
   void wait(std::string &pending, const std::string &expected,
             const uint16_t timeout_ms);
 
+  // Reserve the port for the entire write/response pair. Separate send() and
+  // wait() calls only reserve their individual operations.
+  void send_and_wait(const std::string &cmd, std::string &pending,
+                     const std::string &expected, const uint16_t timeout_ms);
+
   uint32_t get_baud_rate() const;
   std::string get_name() const;
   uint8_t get_status() const;
 
   bool is_open() const;
   bool is_ok() const;
+  bool is_inflight() const;
 };
 
 } // namespace Serial

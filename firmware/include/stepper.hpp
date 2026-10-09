@@ -24,6 +24,8 @@ public:
 
   bool configure_mstep(const uint8_t division);
 
+  double lost(const double deg);
+
   void step(const uint32_t steps, const bool dir);
 
   double revolve(const double deg, const bool dir);

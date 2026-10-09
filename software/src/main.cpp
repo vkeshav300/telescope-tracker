@@ -6,7 +6,9 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include <array>
 #include <chrono>
+#include <cstddef>
 #include <exception>
 #include <future>
 #include <iostream>
@@ -20,8 +22,8 @@ int main() {
   Serial::Log log("main");
   Serial::Port port;
 
-  std::future<void>
-      connection_task; // Prevent a port from being destroyed while connecting
+  std::future<void> connection_task,
+      stepper_task; // Prevent a port from being destroyed while connecting
   std::string connection_status = "Not Connected";
 
   glfwSetErrorCallback(glfw_error_callback);
@@ -144,6 +146,15 @@ int main() {
       }
     }
 
+    if (stepper_task.valid() && stepper_task.wait_for(std::chrono::milliseconds(
+                                    0)) == std::future_status::ready) {
+      try {
+        stepper_task.get();
+      } catch (const std::exception &err) {
+        log.add_entry("stepper command failed: " + std::string(err.what()));
+      }
+    }
+
     // Poll and handle events (inputs, window resize, etc.)
     // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to
     // tell if dear imgui wants to use your inputs.
@@ -193,7 +204,7 @@ int main() {
       ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
       ImGui::Begin("Connection");
 
-      ImGui::BeginDisabled(connection_task.valid());
+      ImGui::BeginDisabled(connection_task.valid() || stepper_task.valid());
       const bool refresh_ports = ImGui::Button("Refresh Ports");
       if (!ports_loaded || refresh_ports) {
         const std::string selected_name =
@@ -232,7 +243,7 @@ int main() {
       ImGui::TextUnformatted(status.c_str());
 
       const bool selection_changed =
-          ImGui::Combo("Ports", &selection, port_names.data(),
+          ImGui::Combo("##ports", &selection, port_names.data(),
                        static_cast<int>(port_names.size()));
 
       if ((selection_changed || retry_connection) && selection > 0 &&
@@ -248,6 +259,42 @@ int main() {
         } catch (const std::exception &err) {
           connection_status = "Connection failed";
           log.add_entry("connection failed: " + std::string(err.what()));
+        }
+      }
+
+      ImGui::EndDisabled();
+      ImGui::End();
+    }
+
+    // Stepper control panel
+    {
+      const std::array<const char *, 2> cmds = {"step", "revolve"};
+      static int selection = 0, steps = 0;
+      static float deg = 0;
+
+      ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
+      ImGui::Begin("Stepper Control");
+
+      ImGui::Combo("##commands", &selection, cmds.data(),
+                   static_cast<int>(cmds.size()));
+
+      if (selection == 0)
+        ImGui::InputInt("steps", &steps);
+      else
+        ImGui::SliderFloat("deg", &deg, -360.0f, 360.0f);
+
+      ImGui::BeginDisabled(stepper_task.valid());
+      if (ImGui::Button("Submit") && !stepper_task.valid()) {
+        const std::string cmd = selection == 0
+                                    ? "step " + std::to_string(steps)
+                                    : "revolve " + std::to_string(deg);
+        try {
+          stepper_task = std::async(std::launch::async, [&port, cmd] {
+            std::string pending;
+            port.send_and_wait(cmd, pending, "finish", 5000);
+          });
+        } catch (const std::exception &err) {
+          log.add_entry("failed to send command");
         }
       }
 

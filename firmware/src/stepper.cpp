@@ -64,6 +64,12 @@ bool Motor::configure_mstep(const uint8_t division) {
   return 0;
 }
 
+double Motor::lost(const double deg) {
+  const double resolution = static_cast<double>(m_step_angle) / m_division;
+  const uint32_t steps = static_cast<uint32_t>(std::floor(deg / resolution));
+  return deg - steps * resolution;
+}
+
 void Motor::step(const uint32_t steps, const bool dir) {
   digitalWrite(m_pin_dir, dir);
   delay(250);
@@ -77,12 +83,8 @@ void Motor::step(const uint32_t steps, const bool dir) {
 }
 
 double Motor::revolve(const double deg, const bool dir) {
-  const double resolution = static_cast<double>(m_step_angle) / m_division;
-  const uint32_t steps = static_cast<uint32_t>(std::floor(deg / resolution));
-
   step(static_cast<uint32_t>(deg * m_division / m_step_angle), dir);
-
-  return deg - steps * resolution;
+  return lost(deg);
 }
 
 } // namespace Stepper

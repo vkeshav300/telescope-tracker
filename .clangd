@@ -1,0 +1,18 @@
+CompileFlags:
+  CompilationDatabase: .
+
+---
+# Keep the real GCC flags in compile_commands.json, but hide flags that Clang's
+# parser does not support. Desktop compiler flags are unaffected.
+If:
+  PathMatch: firmware/.*
+CompileFlags:
+  # Select the ESP32 target explicitly instead of the laptop's architecture,
+  # and only use the exported ESP32 headers, not the laptop's system headers.
+  Add: [--target=xtensa-esp32-elf, -fno-blocks, -nostdinc, -nostdinc++]
+  Remove:
+    - -mlongcalls
+    - -mdisable-hardware-atomics
+    - -mfix-esp32-psram-cache-*
+    - -fstrict-volatile-bitfields
+    - -fno-tree-switch-conversion

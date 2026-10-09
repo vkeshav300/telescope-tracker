@@ -4,41 +4,41 @@ project(telescope_tracker
     LANGUAGES CXX
 )
 
-find_program(PIO_COMMAND
-    NAMES pio platformio
-    REQUIRED
-)
+# CMake exports the desktop commands; PlatformIO exports the ESP32 commands.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Compile commands (for language syntax parsing) 
-set(PIO_COMPILE_COMMANDS "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json")
+if(NOT CMAKE_GENERATOR MATCHES "Makefiles|Ninja")
+    message(FATAL_ERROR "Compile command export requires a Makefiles or Ninja generator.")
+endif()
+
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(FATAL_ERROR "Use an out-of-source build: cmake -S . -B build")
+endif()
+
+# Keep firmware upload and serial monitoring explicit in the root build.
+add_subdirectory(firmware EXCLUDE_FROM_ALL)
+add_subdirectory(software)
+
+# Do not overwrite CMake's desktop-only database in the build directory.
+# Publish the combined database at the project root for LSP auto-discovery.
+set(MERGED_COMPILE_COMMANDS "${PROJECT_BINARY_DIR}/lsp/compile_commands.json")
 add_custom_target(export_compile_commands ALL
-    COMMAND "${PIO_COMMAND}" run -t compiledb
+    COMMAND "${CMAKE_COMMAND}"
+            "-DSOFTWARE_DATABASE=${PROJECT_BINARY_DIR}/compile_commands.json"
+            "-DFIRMWARE_DATABASE=${PROJECT_BINARY_DIR}/firmware/compile_commands.json"
+            "-DOUTPUT_DATABASE=${MERGED_COMPILE_COMMANDS}"
+            -P "${PROJECT_SOURCE_DIR}/cmake/merge_compile_commands.cmake"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${PIO_COMPILE_COMMANDS}"
-            "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"
-    COMMAND "${CMAKE_COMMAND}" -E remove -f "${PIO_COMPILE_COMMANDS}"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    USES_TERMINAL
-    COMMENT "Generating compile commands"
+            "${MERGED_COMPILE_COMMANDS}"
+            "${PROJECT_SOURCE_DIR}/compile_commands.json"
+    BYPRODUCTS
+        "${MERGED_COMPILE_COMMANDS}"
+        "${PROJECT_SOURCE_DIR}/compile_commands.json"
+    VERBATIM
+    COMMENT "Exporting firmware and software compile commands for the LSP"
 )
-
-# Build
-add_custom_target(firmware
-    COMMAND "${PIO_COMMAND}" run
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    USES_TERMINAL
-    COMMENT "Building firmware"
-)
-
+add_dependencies(export_compile_commands export_firmware_compile_commands)
+add_dependencies(software export_compile_commands)
 add_dependencies(firmware export_compile_commands)
 
-# Upload
-add_custom_target(upload ALL
-    COMMAND "${PIO_COMMAND}" run -t upload
-    COMMAND "${PIO_COMMAND}" device monitor -b 115200
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    USES_TERMINAL
-    COMMENT "Building and uploading firmware"
-)
-
-add_dependencies(upload export_compile_commands)
+add_custom_target(full DEPENDS firmware software)

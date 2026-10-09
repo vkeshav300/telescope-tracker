@@ -70,7 +70,7 @@ void process_cmd(const char *cmd) {
     const double lost = stepper.revolve(
         std::abs(deg), deg < 0 ? Stepper::DIR_CCW : Stepper::DIR_CW);
 
-    respond(RESPONSE_FINISH, (String(cmd) + " " + lost).c_str());
+    respond(RESPONSE_FINISH, (String(cmd) + " " + String(lost, 6)).c_str());
     return;
   }
 

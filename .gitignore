@@ -4,5 +4,8 @@ build/
 .cache/
 compile_commands.json
 
+# Runtime
+imgui.ini
+
 # OS Caches
 .DS_Store

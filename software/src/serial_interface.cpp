@@ -1,11 +1,12 @@
 #include "serial_interface.hpp"
+#include "log.hpp"
 
 #include <libserialport.h>
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -21,7 +22,7 @@ int check(sp_return result) {
   return static_cast<int>(result);
 }
 
-ports_list_t get_ports() {
+port_list_t get_ports() {
   sp_port **ports_sp = nullptr;
   const sp_return result = sp_list_ports(&ports_sp);
   if (result < 0)
@@ -29,7 +30,7 @@ ports_list_t get_ports() {
 
   try {
     std::vector<Port_Info> ports;
-    for (size_t i = 0; ports_sp[i] != nullptr; i++) {
+    for (std::size_t i = 0; ports_sp[i] != nullptr; i++) {
       const char *name = sp_get_port_name(ports_sp[i]);
       const char *desc = sp_get_port_description(ports_sp[i]);
       ports.emplace_back(Port_Info{name, desc});
@@ -45,19 +46,28 @@ ports_list_t get_ports() {
   return {};
 }
 
-Port::Port(const std::string &name, const uint32_t baud_rate)
-    : m_baud_rate(baud_rate), m_name(name) {
+Port::Port(const std::string &name, const uint32_t baud_rate) : Port() {
+  initialize(name, baud_rate);
+}
+
+void Port::initialize(const std::string &name, const uint32_t baud_rate) {
+  clean();
+  m_status = STATUS_ERR_CONNECTION;
+  m_name = name;
+  m_baud_rate = baud_rate;
+  m_log.emplace("port " + m_name);
+
   try {
-    log("opening port");
+    m_log->add_entry("opening port");
     check(sp_get_port_by_name(name.c_str(), &m_handle));
     check(sp_open(m_handle, SP_MODE_READ_WRITE));
     m_open = true;
 
-    log("configuring port");
+    m_log->add_entry("configuring port");
     check(sp_set_baudrate(m_handle, baud_rate));
 
     check(sp_set_bits(m_handle,
-                      8)); // Corresponds to SERIAL_8N1 in Serial.begin()
+                      8)); // Next 3 lines correspond to Serial_8N1
     check(sp_set_parity(m_handle, SP_PARITY_NONE));
     check(sp_set_stopbits(m_handle, 1));
 
@@ -70,8 +80,8 @@ Port::Port(const std::string &name, const uint32_t baud_rate)
     std::string pending;
     constexpr char MAX_ATTEMPTS = 10;
     for (char attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
-      log("connecting to device (attempt " + std::to_string(attempt + 1) +
-          "/10)");
+      m_log->add_entry("connecting to device (attempt " +
+                       std::to_string(attempt + 1) + "/10)");
       send("ping");
       wait(pending, "pong", 500);
       if (m_status == STATUS_OK || m_status == STATUS_ERR_COMMUNICATION)
@@ -83,25 +93,24 @@ Port::Port(const std::string &name, const uint32_t baud_rate)
       return;
     }
 
-    log("connected");
-  } catch (const std::exception &err) {
+    if (m_status == STATUS_OK)
+      m_log->add_entry("connected");
+  } catch (...) {
     clean();
-    throw err;
+    throw;
   }
 }
 
 Port::~Port() { clean(); }
 
 void Port::clean() {
-  if (m_open)
-    sp_close(m_handle);
-
-  if (m_handle)
+  if (m_handle) {
+    if (m_open)
+      sp_close(m_handle);
     sp_free_port(m_handle);
-}
-
-void Port::log(const std::string &msg) const {
-  std::cout << "[port " << m_name << "] " << msg << "\n";
+    m_handle = nullptr;
+  }
+  m_open = false;
 }
 
 void Port::change_status(const std::pair<uint8_t, std::string> &result) {
@@ -110,11 +119,15 @@ void Port::change_status(const std::pair<uint8_t, std::string> &result) {
 
 void Port::change_status(const uint8_t status, const std::string &msg) {
   m_status = status;
-  log("status changed: " + std::to_string(status) + " " + msg);
+  if (m_log)
+    m_log->add_entry("status changed: " + std::to_string(status) + " " + msg);
 }
 
 void Port::send(const std::string &cmd) {
-  log("TX: " + cmd);
+  if (!m_open)
+    throw std::logic_error("Cannot send: serial port is not initialized/open");
+
+  m_log->add_entry("TX: " + cmd);
   const std::string msg = cmd + '\n';
   const int written =
       check(sp_blocking_write(m_handle, msg.data(), msg.size(), 1000));
@@ -126,6 +139,9 @@ void Port::send(const std::string &cmd) {
 
 void Port::wait(std::string &pending, const std::string &expected,
                 const uint16_t timeout_ms) {
+  if (!m_open)
+    throw std::logic_error("Cannot wait: serial port is not initialized/open");
+
   using clock = std::chrono::steady_clock;
   const auto deadline = clock::now() + std::chrono::milliseconds(timeout_ms);
 
@@ -141,7 +157,7 @@ void Port::wait(std::string &pending, const std::string &expected,
       if (!line.empty() && line.back() == '\r')
         line.pop_back();
 
-      log("RX: " + line);
+      m_log->add_entry("RX: " + line);
 
       if (line == expected) {
         change_status(STATUS_OK, "");
@@ -185,6 +201,6 @@ uint8_t Port::get_status() const { return m_status; }
 
 bool Port::is_open() const { return m_open; }
 
-bool Port::is_ok() const { return m_status == STATUS_OK; }
+bool Port::is_ok() const { return m_open && m_status == STATUS_OK; }
 
 } // namespace Serial

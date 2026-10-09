@@ -10,7 +10,6 @@
 #include <exception>
 #include <future>
 #include <iostream>
-#include <sstream>
 #include <string>
 
 static void glfw_error_callback(int error, const char *desc) {
@@ -18,47 +17,11 @@ static void glfw_error_callback(int error, const char *desc) {
 }
 
 int main() {
-  // std::cout << "select port:\n";
-  // for (size_t i = 0; i < ports.size(); i++)
-  // std::cout << "\t[" << i << "] " << ports[i].name << " (" << ports[i].desc
-  // << ")\n";
-  //
-  // size_t selected_port = ports.size();
-  // for (;;) {
-  // std::cout << "\nenter port number: ";
-  // std::string input;
-  // if (!std::getline(std::cin, input)) {
-  // std::cerr << "port selection canceled or input unavailable\n";
-  // return 1;
-  // }
-  //
-  // std::istringstream selection(input);
-  // long long port_number = 0;
-  // if (selection >> port_number && (selection >> std::ws).eof() &&
-  // port_number >= 0 &&
-  // static_cast<unsigned long long>(port_number) < ports.size()) {
-  // selected_port = static_cast<size_t>(port_number);
-  // break;
-  // }
-  //
-  // std::cerr << "invalid port number\n";
-  // }
-  //
-  // try {
-  // Serial::Port port(ports[selected_port].name, 115200);
-  // if (!port.is_ok()) {
-  // std::cerr << "port is not OK after initialization\n";
-  // return 1;
-  // }
-  // } catch (const std::exception &err) {
-  // std::cerr << "port initialization failed: " << err.what() << "\n";
-  // return 1;
-  // }
   Serial::Log log("main");
   Serial::Port port;
-  // Only the worker accesses port while a connection is in progress. The
-  // future is destroyed before port/log, so they outlive the worker.
-  std::future<void> connection_task;
+
+  std::future<void>
+      connection_task; // Prevent a port from being destroyed while connecting
   std::string connection_status = "Not Connected";
 
   glfwSetErrorCallback(glfw_error_callback);

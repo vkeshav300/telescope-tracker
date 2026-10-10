@@ -188,6 +188,7 @@ int main() {
 
       const std::string text = log.text();
       ImGui::TextUnformatted(text.data(), text.data() + text.size());
+      ImGui::SetScrollHereY(1.0f);
       ImGui::EndChild();
       ImGui::End();
     }

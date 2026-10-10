@@ -1,5 +1,5 @@
 #include "log.hpp"
-#include "serial_interface.hpp"
+#include "ports.hpp"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -19,12 +19,12 @@ static void glfw_error_callback(int error, const char *desc) {
 }
 
 int main() {
-  Serial::Log log("main");
-  Serial::Port port;
-
+  serial::log log("main");
+  serial::port port;
   std::future<void> connection_task,
       stepper_task; // Prevent a port from being destroyed while connecting
   std::string connection_status = "Not Connected";
+  uint8_t result;
 
   glfwSetErrorCallback(glfw_error_callback);
   if (!glfwInit()) {
@@ -34,7 +34,7 @@ int main() {
 
   log.add_entry("glfw initialized");
 
-  /* IMGUI setup
+  /* IMGUI with GLFW and OpenGL
    * (https://github.com/ocornut/imgui/blob/master/examples/example_glfw_opengl3/main.cpp)
    */
   // Select GL version + let the backend select a GLSL version
@@ -136,13 +136,10 @@ int main() {
             std::future_status::ready) {
       try {
         connection_task.get();
-        connection_status = port.is_ok()
-                                ? "Connected to " + port.get_name()
-                                : "Connection failed (status " +
-                                      std::to_string(port.get_status()) + ")";
+        connection_status = port.connected() ? "Connected" : "Not Connected";
       } catch (const std::exception &err) {
         connection_status = "Connection failed";
-        log.add_entry("port initialization failed: " + std::string(err.what()));
+        log.add_entry("err (connection task): " + std::string(err.what()));
       }
     }
 
@@ -151,7 +148,7 @@ int main() {
       try {
         stepper_task.get();
       } catch (const std::exception &err) {
-        log.add_entry("stepper command failed: " + std::string(err.what()));
+        log.add_entry("err (stepper task): " + std::string(err.what()));
       }
     }
 
@@ -178,15 +175,15 @@ int main() {
     // Docking
     const ImGuiID dockspace = ImGui::DockSpaceOverViewport();
 
-    // Log panel
+    // log panel
     {
       ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
-      ImGui::Begin("Log");
+      ImGui::Begin("log");
       if (ImGui::Button("Clear"))
         log.clear();
 
       ImGui::Separator();
-      ImGui::BeginChild("Log Output", ImVec2(0, 0), 0,
+      ImGui::BeginChild("log Output", ImVec2(0, 0), 0,
                         ImGuiWindowFlags_HorizontalScrollbar);
 
       const std::string text = log.text();
@@ -197,7 +194,7 @@ int main() {
 
     // Connection panel
     {
-      static Serial::port_list_t ports = {};
+      static serial::port_list_t ports = {};
       static int selection = 0;
       static bool ports_loaded = false;
 
@@ -213,7 +210,7 @@ int main() {
                 : "";
         ports_loaded = true;
         try {
-          ports = Serial::get_ports();
+          ports = serial::get_ports();
           selection = 0;
           for (std::size_t i = 0; i < ports.size(); ++i) {
             if (ports[i].name == selected_name) {
@@ -222,7 +219,7 @@ int main() {
             }
           }
         } catch (const std::exception &err) {
-          log.add_entry("failed to get ports: " + std::string(err.what()));
+          log.add_entry("err: failed to get ports: " + std::string(err.what()));
         }
       }
 
@@ -252,14 +249,13 @@ int main() {
         const std::string port_name = ports[selection - 1].name;
         connection_status = "Connecting to " + port_name;
 
-        try {
-          connection_task = std::async(std::launch::async, [&port, port_name] {
-            port.initialize(port_name, 115200);
-          });
-        } catch (const std::exception &err) {
-          connection_status = "Connection failed";
-          log.add_entry("connection failed: " + std::string(err.what()));
-        }
+        connection_task = std::async(
+            std::launch::async, [&port, &log, &connection_status, port_name] {
+              if (port.init(port_name, 115200) != serial::RESULT_OK) {
+                log.add_entry("err: connection to " + port_name + " failed");
+                connection_status = "Connection failed";
+              }
+            });
       }
 
       ImGui::EndDisabled();
@@ -288,14 +284,11 @@ int main() {
         const std::string cmd = selection == 0
                                     ? "step " + std::to_string(steps)
                                     : "revolve " + std::to_string(deg);
-        try {
-          stepper_task = std::async(std::launch::async, [&port, cmd] {
-            std::string pending;
-            port.send_and_wait(cmd, pending, "finish", 5000);
-          });
-        } catch (const std::exception &err) {
-          log.add_entry("failed to send command");
-        }
+        stepper_task = std::async(std::launch::async, [&port, &log, cmd] {
+          if (port.send(cmd) != serial::RESULT_OK ||
+              port.wait(std::chrono::milliseconds(10000)) != serial::RESULT_OK)
+            log.add_entry("err: command failed");
+        });
       }
 
       ImGui::EndDisabled();

@@ -6,12 +6,12 @@
 #include <streambuf>
 #include <string>
 
-namespace Serial {
+namespace serial {
 
-class Log {
+class log {
 private:
   // Synchronize the redirected stream itself, including direct cout writes.
-  class Buffer : public std::streambuf {
+  class buffer : public std::streambuf {
   private:
     mutable std::mutex m_mutex;
     std::string m_text;
@@ -26,7 +26,7 @@ private:
     void clear();
   };
 
-  static Buffer m_buffer;
+  static buffer m_buffer;
   static std::mutex m_lifecycle_mutex;
   static std::streambuf *m_original;
   static std::size_t instances;
@@ -34,11 +34,9 @@ private:
   std::string m_identifier;
 
 public:
-  Log(const std::string &identifier);
-  Log(const Log &) = delete;
-  ~Log();
-
-  Log &operator=(const Log &) = delete;
+  log(const std::string &identifier);
+  log(const log &) = delete;
+  ~log();
 
   std::string text() const;
 
@@ -47,4 +45,4 @@ public:
   void add_entry(const std::string &entry);
 };
 
-} // namespace Serial
+} // namespace serial

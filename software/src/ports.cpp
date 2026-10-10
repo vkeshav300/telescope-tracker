@@ -56,7 +56,12 @@ port_list_t get_ports() {
 void port::clean() {
   if (m_handle) {
     if (m_open.load()) {
-      m_connected.exchange(false);
+      if (m_connected.load()) {
+        send("disconnect");
+        wait(std::chrono::milliseconds(100));
+        m_connected.exchange(false);
+      }
+
       sp_close(m_handle);
       m_open.exchange(false);
     }
@@ -153,6 +158,8 @@ port::port(const std::string &name, const uint32_t baud_rate) {
 port::~port() { clean(); }
 
 uint8_t port::init(const std::string &name, const uint32_t baud_rate) {
+  clean();
+
   std::unique_lock<std::mutex> lock(m_mtx, std::try_to_lock);
   if (!lock.owns_lock()) {
     m_log.add_entry("err: port is in-use");
@@ -163,8 +170,6 @@ uint8_t port::init(const std::string &name, const uint32_t baud_rate) {
     m_pending_finish.reset();
     m_pending_buff.clear();
   }
-
-  clean();
 
   m_name = name;
   m_baud_rate = baud_rate;
@@ -216,6 +221,8 @@ uint8_t port::init(const std::string &name, const uint32_t baud_rate) {
 }
 
 uint8_t port::send(const std::string &cmd, const std::string &expected_prefix) {
+  wait(std::chrono::milliseconds(100));
+
   std::unique_lock<std::mutex> lock(m_mtx, std::try_to_lock);
   if (!lock.owns_lock()) {
     m_log.add_entry("err: port is in-use");

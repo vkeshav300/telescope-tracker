@@ -209,6 +209,7 @@ int main() {
                 ? ports[selection - 1].name
                 : "";
         ports_loaded = true;
+
         try {
           ports = serial::get_ports();
           selection = 0;
@@ -265,27 +266,43 @@ int main() {
     // Stepper control panel
     {
       const std::array<const char *, 2> cmds = {"step", "revolve"};
-      static int selection = 0, steps = 0;
+      const std::array<const char *, 4> msteps = {"1/8", "1/16", "1/32",
+                                                  "1/64"};
+      const std::array<int, 4> divisions = {8, 16, 32, 64};
+      static int selection_cmd = 0, selection_mstep = 0, steps = 0;
       static float deg = 0;
 
       ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
       ImGui::Begin("Stepper Control");
 
-      ImGui::Combo("##commands", &selection, cmds.data(),
+      ImGui::Combo("##commands", &selection_cmd, cmds.data(),
                    static_cast<int>(cmds.size()));
 
-      if (selection == 0)
+      if (selection_cmd == 0)
         ImGui::InputInt("steps", &steps);
       else
         ImGui::SliderFloat("deg", &deg, -360.0f, 360.0f);
 
+      ImGui::Combo("microstep", &selection_mstep, msteps.data(),
+                   static_cast<int>(msteps.size()));
+
+      const int mstep = divisions[selection_mstep];
+
       ImGui::BeginDisabled(stepper_task.valid());
       if (ImGui::Button("Submit") && !stepper_task.valid()) {
-        const std::string cmd = selection == 0
-                                    ? "step " + std::to_string(steps)
-                                    : "revolve " + std::to_string(deg);
-        stepper_task = std::async(std::launch::async, [&port, &log, cmd] {
-          if (port.send(cmd) != serial::RESULT_OK ||
+        const std::string cmd_move = selection_cmd == 0
+                                         ? "step " + std::to_string(steps)
+                                         : "revolve " + std::to_string(deg),
+                          cmd_mstep =
+                              "mstep " +
+                              std::to_string(divisions[selection_mstep]);
+        stepper_task = std::async(std::launch::async, [&port, &log, cmd_move,
+                                                       cmd_mstep] {
+          if (port.send(cmd_mstep) != serial::RESULT_OK ||
+              port.wait(std::chrono::milliseconds(500)) != serial::RESULT_OK)
+            log.add_entry("err: command failed");
+
+          if (port.send(cmd_move) != serial::RESULT_OK ||
               port.wait(std::chrono::milliseconds(10000)) != serial::RESULT_OK)
             log.add_entry("err: command failed");
         });

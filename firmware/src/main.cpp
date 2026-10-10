@@ -9,7 +9,7 @@
 
 #include "stepper.hpp"
 
-static Stepper::Motor stepper(23, 22, 19, 18, 0.9f);
+static stepper::motor motor_1(23, 22, 19, 18, 0.9f);
 
 enum : uint8_t {
   RESPONSE_RECEIVE = 0,
@@ -67,8 +67,8 @@ void process_cmd(const char *cmd) {
       return;
     }
 
-    const double lost = stepper.revolve(
-        std::abs(deg), deg < 0 ? Stepper::DIR_CCW : Stepper::DIR_CW);
+    const double lost = motor_1.revolve(
+        std::abs(deg), deg < 0 ? stepper::DIR_CCW : stepper::DIR_CW);
 
     respond(RESPONSE_FINISH, (String(cmd) + " " + String(lost, 6)).c_str());
     return;
@@ -85,13 +85,39 @@ void process_cmd(const char *cmd) {
 
     if (end == arg || *end != '\0' || errno == ERANGE || steps < -MAX_STEPS ||
         steps > MAX_STEPS) {
-      respond(RESPONSE_ERR, "invalid step count");
+      respond(RESPONSE_ERR, "invalid command");
       return;
     }
 
-    stepper.step(static_cast<uint32_t>(steps < 0 ? -steps : steps),
-                 steps < 0 ? Stepper::DIR_CCW : Stepper::DIR_CW);
+    motor_1.step(static_cast<uint32_t>(steps < 0 ? -steps : steps),
+                 steps < 0 ? stepper::DIR_CCW : stepper::DIR_CW);
 
+    respond(RESPONSE_FINISH, cmd);
+    return;
+  }
+
+  if (std::strncmp(cmd, "mstep ", 6) == 0) {
+    respond(RESPONSE_RECEIVE, cmd);
+    const char *arg = cmd + 6;
+    char *end = nullptr;
+
+    errno = 0;
+    const long division = std::strtol(arg, &end, 10);
+
+    if (end == arg || *end != '\0' || errno == ERANGE || division < 0 ||
+        division > 255) {
+      respond(RESPONSE_ERR, "invalid command");
+      return;
+    }
+
+    motor_1.configure_mstep(static_cast<uint8_t>(division));
+
+    respond(RESPONSE_FINISH, cmd);
+    return;
+  }
+
+  if (std::strcmp(cmd, "disconnect") == 0) {
+    respond(RESPONSE_RECEIVE, cmd);
     respond(RESPONSE_FINISH, cmd);
     return;
   }

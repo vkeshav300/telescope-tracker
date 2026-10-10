@@ -2,11 +2,11 @@
 
 #include <cstdint>
 
-namespace Stepper {
+namespace stepper {
 
 enum : bool { DIR_CCW = 0, DIR_CW = 1 };
 
-class Motor {
+class motor {
 private:
   uint8_t m_pin_step, m_pin_dir, m_pin_ms1, m_pin_ms2, m_division = 8,
                                                        m_pulse_us = 5;
@@ -14,12 +14,12 @@ private:
   float m_step_angle;
 
 public:
-  Motor(const uint8_t pin_step, const uint8_t pin_dir);
+  motor(const uint8_t pin_step, const uint8_t pin_dir);
 
-  Motor(const uint8_t pin_step, const uint8_t pin_dir, const uint8_t pin_ms1,
+  motor(const uint8_t pin_step, const uint8_t pin_dir, const uint8_t pin_ms1,
         const uint8_t pin_ms2);
 
-  Motor(const uint8_t pin_step, const uint8_t pin_dir, const uint8_t pin_ms1,
+  motor(const uint8_t pin_step, const uint8_t pin_dir, const uint8_t pin_ms1,
         const uint8_t pin_ms2, const float step_angle);
 
   bool configure_mstep(const uint8_t division);
@@ -31,4 +31,4 @@ public:
   double revolve(const double deg, const bool dir);
 };
 
-} // namespace Stepper
+} // namespace stepper

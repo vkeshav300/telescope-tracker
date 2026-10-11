@@ -6,14 +6,14 @@
 #include <streambuf>
 #include <string>
 
-namespace Serial {
+namespace serial {
 
-Log::Buffer Log::m_buffer;
-std::mutex Log::m_lifecycle_mutex;
-std::streambuf *Log::m_original = nullptr;
-std::size_t Log::instances = 0;
+log::buffer log::m_buffer;
+std::mutex log::m_lifecycle_mutex;
+std::streambuf *log::m_original = nullptr;
+std::size_t log::instances = 0;
 
-std::streamsize Log::Buffer::xsputn(const char *text, std::streamsize count) {
+std::streamsize log::buffer::xsputn(const char *text, std::streamsize count) {
   if (count > 0) {
     const std::lock_guard<std::mutex> lock(m_mutex);
     m_text.append(text, static_cast<std::size_t>(count));
@@ -21,7 +21,7 @@ std::streamsize Log::Buffer::xsputn(const char *text, std::streamsize count) {
   return count;
 }
 
-Log::Buffer::int_type Log::Buffer::overflow(int_type ch) {
+log::buffer::int_type log::buffer::overflow(int_type ch) {
   if (!traits_type::eq_int_type(ch, traits_type::eof())) {
     const char character = traits_type::to_char_type(ch);
     xsputn(&character, 1);
@@ -29,22 +29,22 @@ Log::Buffer::int_type Log::Buffer::overflow(int_type ch) {
   return traits_type::not_eof(ch);
 }
 
-void Log::Buffer::append(const std::string &text) {
+void log::buffer::append(const std::string &text) {
   const std::lock_guard<std::mutex> lock(m_mutex);
   m_text += text;
 }
 
-std::string Log::Buffer::text() const {
+std::string log::buffer::text() const {
   const std::lock_guard<std::mutex> lock(m_mutex);
   return m_text;
 }
 
-void Log::Buffer::clear() {
+void log::buffer::clear() {
   const std::lock_guard<std::mutex> lock(m_mutex);
   m_text.clear();
 }
 
-Log::Log(const std::string &identifier) : m_identifier(identifier) {
+log::log(const std::string &identifier) : m_identifier(identifier) {
   const std::lock_guard<std::mutex> lock(m_lifecycle_mutex);
   if (instances == 0)
     m_original = std::cout.rdbuf(&m_buffer);
@@ -52,7 +52,7 @@ Log::Log(const std::string &identifier) : m_identifier(identifier) {
   instances++;
 }
 
-Log::~Log() {
+log::~log() {
   const std::lock_guard<std::mutex> lock(m_lifecycle_mutex);
   if (instances == 1)
     std::cout.rdbuf(m_original);
@@ -60,14 +60,14 @@ Log::~Log() {
   instances--;
 }
 
-std::string Log::text() const { return m_buffer.text(); }
+std::string log::text() const { return m_buffer.text(); }
 
-void Log::clear() { m_buffer.clear(); }
+void log::clear() { m_buffer.clear(); }
 
-void Log::add_entry(const std::string &entry) {
+void log::add_entry(const std::string &entry) {
   // Append a whole entry atomically so messages from different threads do
   // not interleave. cout still uses the same synchronized buffer.
   m_buffer.append("[" + m_identifier + "] " + entry + "\n");
 }
 
-} // namespace Serial
+} // namespace serial
